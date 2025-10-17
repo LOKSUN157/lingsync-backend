@@ -18,7 +18,7 @@ const app = express();
 // Middleware
 app.use(cors());
 app.use(express.json({ limit: "10mb" })); // Allow large audio payloads
-app.use(express.static("public"));
+app.use(express.static("public"));       // <<< 关键：优先服务前端静态文件
 
 // Environment variables
 const PORT = process.env.PORT || 3001;
@@ -72,9 +72,9 @@ app.post("/api/synthesize", async (req, res) => {
 });
 
 //---------------------------------------------------
-// ✅ Root route
+// ✅ Root route (现在作为API的健康检查点，在最后)
 //---------------------------------------------------
-app.get("/", (req, res) => {
+app.get("/api/health", (req, res) => {
   res.send("🚀 LingSync Backend API is running...");
 });
 
