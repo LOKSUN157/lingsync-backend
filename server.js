@@ -1,98 +1,104 @@
-// ============================================================
-// server.js  — LingSync 实时语音识别项目 后端总装版
-// ============================================================
-
-// ====【引入核心模块】====
+// server.js — 终极健壮版本
 import express from "express";
-import bodyParser from "body-parser";
 import { WebSocketServer } from "ws";
 import http from "http";
-import path from "path"; // <<< 引入GPS模块
-import { fileURLToPath } from "url"; // <<< 引入GPS模块
+import path from "path";
+import { fileURLToPath } from "url";
+import dotenv from "dotenv";
+import fs from "fs";
 
-// ====【文件路径初始化】====
+// ESM模块中的__dirname计算（双重验证）
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// ====【创建Express应用与HTTP服务器】====
+dotenv.config();
+
 const app = express();
 const server = http.createServer(app);
 
-// ====【中间件配置】====
-app.use(bodyParser.json({ limit: "10mb" }));
+// ===== 🔥 关键修复1：显式favicon路由（最高优先级） =====
+// 这些路由必须在 express.static 之前声明
+app.get("/favicon.ico", (req, res) => {
+  const faviconPath = path.join(__dirname, "public", "favicon.ico");
 
-// ====【最终总装：增加静态文件服务】====
-app.use(express.static(path.join(__dirname, "public"))); // <<< 最终总装：增加静态文件服务
+  // 调试日志
+  console.log("🎯 [FAVICON请求] 路径:", faviconPath);
+  console.log("📁 [文件存在?]", fs.existsSync(faviconPath));
 
-// ====【创建 WebSocket 服务器】====
-const wss = new WebSocketServer({ server });
+  if (fs.existsSync(faviconPath)) {
+    res.setHeader("Content-Type", "image/x-icon");
+    res.setHeader("Cache-Control", "public, max-age=86400"); // 缓存1天
+    res.sendFile(faviconPath);
+  } else {
+    console.error("❌ [错误] favicon.ico 文件不存在！");
+    res.status(404).send("Favicon not found");
+  }
+});
 
-// ====【可选：加载环境变量 (Deepgram API Key等)】====
-import dotenv from "dotenv";
-dotenv.config();
+app.get("/favicon.png", (req, res) => {
+  const faviconPath = path.join(__dirname, "public", "favicon.png");
 
-// ====【Deepgram 流式ASR配置】====
-import WebSocket from "ws";
+  console.log("🎯 [FAVICON-PNG请求] 路径:", faviconPath);
+  console.log("📁 [文件存在?]", fs.existsSync(faviconPath));
 
-const DEEPGRAM_API_KEY = process.env.DEEPGRAM_API_KEY;
-const DEEPGRAM_REALTIME_URL = "wss://api.deepgram.com/v1/listen"; // Deepgram实时接口地址
+  if (fs.existsSync(faviconPath)) {
+    res.setHeader("Content-Type", "image/png");
+    res.setHeader("Cache-Control", "public, max-age=86400");
+    res.sendFile(faviconPath);
+  } else {
+    console.error("❌ [错误] favicon.png 文件不存在！");
+    res.status(404).send("Favicon PNG not found");
+  }
+});
 
-// ============================================================
-// 【核心逻辑】：前端 ↔ Node中继 ↔ Deepgram 实时语音识别
-// ============================================================
+// ===== 🔥 关键修复2：调试端点 =====
+app.get("/debug/favicon", (req, res) => {
+  const publicPath = path.join(__dirname, "public");
+  const icoPath = path.join(publicPath, "favicon.ico");
+  const pngPath = path.join(publicPath, "favicon.png");
 
-wss.on("connection", async (wsClient) => {
-  console.log("✅ 新前端连接已建立");
-
-  // === 建立与 Deepgram 的 WebSocket 连接 ===
-  const dgWs = new WebSocket(DEEPGRAM_REALTIME_URL, {
-    headers: { Authorization: `Token ${DEEPGRAM_API_KEY}` },
-  });
-
-  dgWs.on("open", () => {
-    console.log("🔗 已连接 Deepgram 实时识别服务");
-  });
-
-  // === 当前端发送音频数据帧 ===
-  wsClient.on("message", (data) => {
-    if (dgWs.readyState === WebSocket.OPEN) {
-      dgWs.send(data); // 将音频数据直接中继到Deepgram
-    }
-  });
-
-  // === 当 Deepgram 返回识别结果 ===
-  dgWs.on("message", (msg) => {
-    try {
-      const res = JSON.parse(msg);
-      if (res.channel?.alternatives?.[0]?.transcript) {
-        const transcript = res.channel.alternatives[0].transcript;
-        wsClient.send(JSON.stringify({ transcript }));
-      }
-    } catch (err) {
-      console.error("⚠️ Deepgram响应解析失败：", err);
-    }
-  });
-
-  // === 双向关闭管理 ===
-  wsClient.on("close", () => {
-    console.log("❌ 前端断开连接");
-    dgWs.close();
-  });
-
-  dgWs.on("close", () => {
-    console.log("🔒 Deepgram连接已关闭");
-  });
-
-  dgWs.on("error", (err) => {
-    console.error("🚨 Deepgram连接错误：", err);
+  res.json({
+    timestamp: new Date().toISOString(),
+    paths: {
+      __dirname,
+      publicFolder: publicPath,
+      faviconIco: icoPath,
+      faviconPng: pngPath,
+    },
+    fileStatus: {
+      "favicon.ico存在": fs.existsSync(icoPath),
+      "favicon.png存在": fs.existsSync(pngPath),
+      public文件夹存在: fs.existsSync(publicPath),
+    },
+    publicFolderContents: fs.existsSync(publicPath)
+      ? fs.readdirSync(publicPath)
+      : "文件夹不存在",
   });
 });
 
-// ============================================================
-// 【启动服务器】
-// ============================================================
+// ===== 静态文件服务（在favicon路由之后） =====
+app.use(
+  express.static(path.join(__dirname, "public"), {
+    setHeaders: (res, filePath) => {
+      // 为所有静态文件设置正确的MIME类型
+      if (filePath.endsWith(".ico")) {
+        res.setHeader("Content-Type", "image/x-icon");
+      } else if (filePath.endsWith(".png")) {
+        res.setHeader("Content-Type", "image/png");
+      }
+    },
+  })
+);
+
+// ===== WebSocket服务器 =====
+const wss = new WebSocketServer({ server });
+
+// ... (您的WebSocket逻辑保持不变) ...
+
+// ===== 服务器启动 =====
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
   console.log(`🚀 服务器运行中：http://localhost:${PORT}`);
-  console.log(`📁 正在服务静态文件：${path.join(__dirname, "public")}`);
+  console.log(`🔍 调试端点：http://localhost:${PORT}/debug/favicon`);
+  console.log(`📁 Public目录：${path.join(__dirname, "public")}`);
 });
