@@ -1,34 +1,97 @@
 <!DOCTYPE html>
-<html lang="zh">
+<html lang="zh-CN">
 
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>LingSync</title>
-    <link rel="stylesheet" href="style.css">
+    <style>
+        body {
+            font-family: "Segoe UI", sans-serif;
+            background-color: #f8f9fa;
+            color: #333;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+        }
+
+        main {
+            background: white;
+            border-radius: 16px;
+            padding: 2rem;
+            width: 400px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+            text-align: center;
+        }
+
+        h1 {
+            margin-bottom: 1rem;
+            color: #0078d7;
+        }
+
+        button {
+            background-color: #0078d7;
+            color: white;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 8px;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+
+        button:hover:not(:disabled) {
+            background-color: #005ea8;
+        }
+
+        button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+
+        section {
+            margin-top: 1.5rem;
+            text-align: left;
+        }
+
+        .output-box {
+            background: #f1f3f5;
+            border-radius: 8px;
+            padding: 1rem;
+            min-height: 60px;
+            margin-top: 0.5rem;
+            font-family: monospace;
+            font-size: 0.95rem;
+            white-space: pre-wrap;
+        }
+    </style>
 </head>
 
 <body>
-    <div class="main-container">
+    <main id="main-container">
         <h1>LingSync</h1>
+        <section id="input-section">
+            <p class="section-label">🎙️ 音频输入源：</p>
+            <p class="static-text">当前输入源：内置麦克风</p>
+        </section>
 
-        <div class="audio-input-section">
-            <!-- 音频输入源区域的具体内容可以后续添加 -->
-        </div>
+        <button id="start-button">开始传译</button>
 
-        <button id="start-button">开始录音</button>
+        <section id="translation-section">
+            <h2>俄语 → 中文 实时字幕</h2>
+            <div id="translation-output" class="output-box">（等待输入...）</div>
+        </section>
 
-        <div id="translation-output">
-            <!-- 俄语到中文的翻译结果将显示在这里 -->
-        </div>
+        <section id="synthesis-section">
+            <h2>中文 → 俄语 语音合成</h2>
+            <div id="synthesis-output" class="output-box">（等待生成...）</div>
+            <button id="play-button">播放发音 🔊</button>
+        </section>
+    </main>
 
-        <div id="synthesis-output">
-            <!-- 中文到俄语的翻译结果将显示在这里 -->
-        </div>
-
-        <button id="play-button">播放翻译</button>
-    </div>
-
+    <!-- ✅ 正确加载前端脚本，不使用 type="module" -->
     <script src="script.js"></script>
 </body>
 

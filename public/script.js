@@ -1,91 +1,72 @@
-// server.js — Whisper 在线语音识别最终版（v4.2）
-// ===================================================
-// ✅ 运行前请确保已设置环境变量：export OPENAI_API_KEY="你的OpenAI密钥"
-// ✅ 安装依赖：npm install express cors body-parser openai
+// ==============================
+// LingSync 前端逻辑（v4.2 稳定版）
+// ==============================
 
-import express from "express";
-import cors from "cors";
-import bodyParser from "body-parser";
-import { Readable } from "stream";
-import OpenAI from "openai";
+document.addEventListener("DOMContentLoaded", () => {
+  // === 获取DOM元素 ===
+  const startButton = document.getElementById("start-button");
+  const translationOutput = document.getElementById("translation-output");
+  const synthesisOutput = document.getElementById("synthesis-output");
+  const playButton = document.getElementById("play-button");
 
-const app = express();
-const port = 3001;
+  // === 开始按钮点击事件 ===
+  startButton.addEventListener("click", async () => {
+    try {
+      startButton.disabled = true;
+      startButton.textContent = "处理中...";
+      translationOutput.textContent = "🎧 正在识别与翻译...";
+      synthesisOutput.textContent = "";
 
-// ====================
-// 中间件
-// ====================
-app.use(cors());
-app.use(bodyParser.json({ limit: "50mb" })); // 支持大音频Base64数据
+      // （此处暂用模拟音频数据；后续前端可替换为真实Base64音频）
+      const mockAudioData = "data:audio/webm;base64,GkXfo59ChoEBQv...";
 
-// ====================
-// 初始化 OpenAI 客户端
-// ====================
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+      // 1️⃣ 向后端发送音频识别请求
+      const transcribeResponse = await fetch(
+        "http://localhost:3001/api/transcribe",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ audio: mockAudioData }),
+        }
+      );
 
-// ====================
-// /api/transcribe — 在线语音识别接口
-// ====================
-app.post("/api/transcribe", async (req, res) => {
-  try {
-    console.log("🎧 Received audio data for online transcription...");
+      if (!transcribeResponse.ok) throw new Error("语音识别请求失败");
+      const transcribeData = await transcribeResponse.json();
+      const russianText = transcribeData.text || "（无识别结果）";
 
-    // 1️⃣ 获取前端传来的 Base64 编码音频
-    const base64Audio = req.body.audio;
-    if (!base64Audio || typeof base64Audio !== "string") {
-      return res.status(400).json({ error: "Missing or invalid audio data." });
+      // 2️⃣ 请求翻译API
+      const translateResponse = await fetch(
+        "http://localhost:3001/api/translate",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text: russianText }),
+        }
+      );
+
+      if (!translateResponse.ok) throw new Error("翻译请求失败");
+      const translateData = await translateResponse.json();
+      const chineseText = translateData.translation || "（翻译失败）";
+
+      // 3️⃣ 更新界面
+      translationOutput.textContent = chineseText;
+      synthesisOutput.textContent = russianText;
+    } catch (error) {
+      console.error("❌ 处理过程中发生错误:", error);
+      translationOutput.textContent = "⚠️ 处理出错，请检查终端日志并重试。";
+    } finally {
+      startButton.disabled = false;
+      startButton.textContent = "开始传译";
     }
+  });
 
-    // 2️⃣ 去除前缀 (例如 data:audio/webm;base64,)
-    const cleanedBase64 = base64Audio.replace(/^data:audio\/\w+;base64,/, "");
-
-    // 3️⃣ 转换为 Buffer
-    const audioBuffer = Buffer.from(cleanedBase64, "base64");
-
-    // 4️⃣ 将 Buffer 转换为可读流（不落地文件）
-    const audioStream = new Readable();
-    audioStream.push(audioBuffer);
-    audioStream.push(null);
-    // 关键：为 Whisper 提供 filename 信息，以便识别文件类型
-    audioStream.path = "audio.webm";
-
-    console.log("🚀 Sending in-memory audio stream to Whisper...");
-
-    // 5️⃣ 调用 OpenAI Whisper API
-    const transcription = await openai.audio.transcriptions.create({
-      file: audioStream,
-      model: "whisper-1",
-      language: "ru", // 指定为俄语，提高识别准确性
-    });
-
-    // 6️⃣ 提取识别结果
-    const resultText = transcription.text?.trim() || "(未识别到语音内容)";
-    console.log("✅ Whisper Transcription Result:", resultText);
-
-    // 7️⃣ 返回结果
-    res.json({ text: resultText });
-  } catch (error) {
-    console.error("❌ Transcription error:", error);
-    res.status(500).json({
-      error: "Failed to transcribe audio.",
-      details: error.message || error.toString(),
-    });
-  }
-});
-
-// ====================
-// 示例翻译API（保持不变）
-// ====================
-app.post("/api/translate", async (req, res) => {
-  console.log("🌐 Received translation request:", req.body.text);
-  res.json({ translation: "您好，这是一段测试文本。" });
-});
-
-// ====================
-// 启动服务器
-// ====================
-app.listen(port, () => {
-  console.log(`✅ LingSync backend running on http://localhost:${port}`);
+  // === 播放按钮事件（仅演示） ===
+  playButton.addEventListener("click", () => {
+    const textToPlay = synthesisOutput.textContent;
+    if (textToPlay && textToPlay.trim() !== "（等待生成...）") {
+      alert(`🔊 正在播放（模拟）: "${textToPlay}"`);
+    } else {
+      alert("⚠️ 当前没有可播放的内容。");
+    }
+  });
 });
