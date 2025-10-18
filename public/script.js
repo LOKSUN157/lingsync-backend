@@ -1,72 +1,89 @@
-// ==============================
-// LingSync 前端逻辑（v4.2 稳定版）
-// ==============================
+// ============================================================
+// script.js — LingSync 前端逻辑（最终修正版）
+// ============================================================
 
-document.addEventListener("DOMContentLoaded", () => {
-  // === 获取DOM元素 ===
-  const startButton = document.getElementById("start-button");
-  const translationOutput = document.getElementById("translation-output");
-  const synthesisOutput = document.getElementById("synthesis-output");
-  const playButton = document.getElementById("play-button");
+// ====【统一API地址定义】====
+const API_BASE_URL = "http://localhost:3000"; // <<< 修正：更新端口号为3000
 
-  // === 开始按钮点击事件 ===
-  startButton.addEventListener("click", async () => {
-    try {
-      startButton.disabled = true;
-      startButton.textContent = "处理中...";
-      translationOutput.textContent = "🎧 正在识别与翻译...";
-      synthesisOutput.textContent = "";
+// ====【全局变量定义】====
+let mediaRecorder;
+let audioChunks = [];
+let ws; // WebSocket连接对象
 
-      // （此处暂用模拟音频数据；后续前端可替换为真实Base64音频）
-      const mockAudioData = "data:audio/webm;base64,GkXfo59ChoEBQv...";
+// ====【WebSocket连接初始化函数】====
+function initWebSocket() {
+  ws = new WebSocket("ws://localhost:3000"); // <<< 修正：更新端口号为3000
 
-      // 1️⃣ 向后端发送音频识别请求
-      const transcribeResponse = await fetch(
-        "http://localhost:3001/api/transcribe",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ audio: mockAudioData }),
-        }
-      );
+  ws.onopen = () => {
+    console.log("✅ 已连接至 WebSocket 服务器");
+  };
 
-      if (!transcribeResponse.ok) throw new Error("语音识别请求失败");
-      const transcribeData = await transcribeResponse.json();
-      const russianText = transcribeData.text || "（无识别结果）";
-
-      // 2️⃣ 请求翻译API
-      const translateResponse = await fetch(
-        "http://localhost:3001/api/translate",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ text: russianText }),
-        }
-      );
-
-      if (!translateResponse.ok) throw new Error("翻译请求失败");
-      const translateData = await translateResponse.json();
-      const chineseText = translateData.translation || "（翻译失败）";
-
-      // 3️⃣ 更新界面
-      translationOutput.textContent = chineseText;
-      synthesisOutput.textContent = russianText;
-    } catch (error) {
-      console.error("❌ 处理过程中发生错误:", error);
-      translationOutput.textContent = "⚠️ 处理出错，请检查终端日志并重试。";
-    } finally {
-      startButton.disabled = false;
-      startButton.textContent = "开始传译";
+  ws.onmessage = (event) => {
+    const data = JSON.parse(event.data);
+    if (data.transcript) {
+      const output = document.getElementById("transcript");
+      output.textContent = data.transcript; // 实时更新识别结果
     }
+  };
+
+  ws.onclose = () => {
+    console.log("❌ WebSocket连接已关闭");
+  };
+
+  ws.onerror = (err) => {
+    console.error("🚨 WebSocket错误：", err);
+  };
+}
+
+// ====【开始录音函数】====
+async function startRecording() {
+  const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  audioChunks = [];
+  mediaRecorder = new MediaRecorder(stream);
+
+  mediaRecorder.ondataavailable = (event) => {
+    if (event.data.size > 0 && ws && ws.readyState === WebSocket.OPEN) {
+      // 将音频片段以ArrayBuffer形式发送给后端
+      event.data.arrayBuffer().then((buffer) => {
+        ws.send(buffer);
+      });
+    }
+  };
+
+  mediaRecorder.start(250); // 每250ms发送一个音频片段
+  console.log("🎙️ 录音开始，实时传输中...");
+}
+
+// ====【停止录音函数】====
+function stopRecording() {
+  if (mediaRecorder && mediaRecorder.state !== "inactive") {
+    mediaRecorder.stop();
+    console.log("🛑 录音已停止");
+  }
+}
+
+// ====【一次性上传录音（备用功能）】====
+async function uploadAudio(blob) {
+  const formData = new FormData();
+  formData.append("audio", blob, "recording.wav");
+
+  // 使用统一的 API_BASE_URL 构建 URL
+  const response = await fetch(`${API_BASE_URL}/api/transcribe`, {
+    // <<< 修正：更新端口号为3000
+    method: "POST",
+    body: formData,
   });
 
-  // === 播放按钮事件（仅演示） ===
-  playButton.addEventListener("click", () => {
-    const textToPlay = synthesisOutput.textContent;
-    if (textToPlay && textToPlay.trim() !== "（等待生成...）") {
-      alert(`🔊 正在播放（模拟）: "${textToPlay}"`);
-    } else {
-      alert("⚠️ 当前没有可播放的内容。");
-    }
-  });
+  const result = await response.json();
+  document.getElementById("transcript").textContent = result.text;
+}
+
+// ====【事件绑定】====
+document.getElementById("startBtn").addEventListener("click", () => {
+  initWebSocket();
+  startRecording();
+});
+
+document.getElementById("stopBtn").addEventListener("click", () => {
+  stopRecording();
 });
